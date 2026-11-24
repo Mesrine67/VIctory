@@ -6,3 +6,10 @@ Local PR-resolution branch: fix/intro-credits-rendering-stability at e06a73ad4c5
 PR #458 still points to techselect/VIctory head 360f382. Push to that source repository was denied (HTTP 403), so the open PR remains unupdated.
 
 Current build/test evidence is in the attached logs. The title executable entry point was not executed because Defender's detection remains on that file and no Windows Sandbox is installed. The current safe preflight mapped the executable and resolved all imports (0 missing).
+
+2026-11-24 repair recheck:
+- Confirmed upstream main and the local clean main checkout are at ffe310eb2098e52169f4c44db5ffdabf43a72622; the Mesrine67 fork main is also at that commit.
+- PR #458 remains OPEN / DIRTY / CONFLICTING, with head 360f38256dea4e80f5b3afd84227b61462b9b6a9.
+- The tested merge resolution e06a73ad4c5d99f3ca175bd8d3cebfb8737566e0 has the PR head and current main as parents and is on the Mesrine67 fork branch.
+- GitHub rejected update-branch due to conflicts and rejected creating a replacement PR because the connected account lacks CreatePullRequest permission. The original source push returns HTTP 403.
+- Complete command outcomes: PR458_repair_attempt_2026-11-24.log.
