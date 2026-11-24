@@ -1,0 +1,22 @@
+   Compiling windows-sys v0.61.2
+   Compiling syn v3.0.10
+   Compiling nu-ansi-term v0.50.3
+   Compiling tempfile v3.27.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_derive v1.0.229
+   Compiling thiserror v2.0.21
+   Compiling victory-shader v0.1.0 (E:\GTA_6\SOURCES\VIctory-fork.worktrees\pr458-amd-test\crates\victory-shader)
+   Compiling serde v1.0.229
+   Compiling victory-core v0.1.0 (E:\GTA_6\SOURCES\VIctory-fork.worktrees\pr458-amd-test\crates\victory-core)
+   Compiling victory-pipeline v0.1.0 (E:\GTA_6\SOURCES\VIctory-fork.worktrees\pr458-amd-test\crates\victory-pipeline)
+   Compiling victory-gpu v0.1.0 (E:\GTA_6\SOURCES\VIctory-fork.worktrees\pr458-amd-test\crates\victory-gpu)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 28.34s
+     Running unittests src\lib.rs (E:\DevCaches\VIctory\pr458-amd-target\debug\deps\victory_gpu-a745063827feae5d.exe)
+
+running 1 test
+PR458 TEST HARDWARE PATH: HostHeap created using the default selected D3D12 device; WARP and diagnostics flags unset.
+test descriptor::host::tests::dynamic_slots_are_held_until_released ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.20s
+

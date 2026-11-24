@@ -1,0 +1,8 @@
+Checked=2026-11-24T08:12:43
+FreePhysicalMB=3277
+FreeCommitMB=7148
+WindowsSandbox=False
+START=BLOCKED
+Windows Sandbox executable is not installed
+free physical memory is 3277 MB; need at least 16384 MB
+free commit is 7148 MB; need at least 24576 MB

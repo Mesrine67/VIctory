@@ -1,0 +1,135 @@
+   Compiling victory-shader v0.1.0 (E:\GTA_6\SOURCES\VIctory-fork.worktrees\pr458-amd-test\crates\victory-shader)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.85s
+     Running unittests src\lib.rs (E:\DevCaches\VIctory\pr458-amd-target\debug\deps\victory_shader-00df0efd42538a52.exe)
+
+running 121 tests
+test dxbc::tests::rejects_bad_input ... ok
+test dxbc::tests::round_trips_parts ... ok
+test dxil::tests::detects_xbox_layout ... ok
+test dxil::tests::parses_standard_layout ... ok
+test dxil::tests::rejects_missing_bitcode_magic ... ok
+test emit::bitcode::tests::bench_write ... ignored, benchmark: cargo test --release -p victory-shader bitcode -- --ignored --nocapture
+test emit::bitcode::tests::successors_of_each_terminator ... ok
+test emit::bitcode::tests::unread_phis_are_dropped ... ok
+test emit::bitcode::tests::vbr_and_blocks ... ok
+test emit::bitcode::tests::worklist_liveness_matches_passes ... ok
+test emit::bitcode::tests::written_bytes_unchanged ... ok
+test emit::container::tests::md5_core_matches_the_standard ... ok
+test emit::diff_tests::float_semantics_are_the_consoles ... ok
+test emit::diff_tests::translated_compute_matches_pc ... ok
+test emit::diff_tests::translated_mesh_shaders_draw_as_pc_ones ... ok
+test emit::diff_tests::translated_shaders_draw_as_pc_ones ... ok
+test emit::lower::tests::a_descriptor_selected_by_scc_picks_its_heap_index ... ok
+test emit::lower::tests::a_missing_value_stays_missing_through_two_live_joins ... ok
+test emit::lower::tests::a_scalar_carry_chain_reaches_the_select ... ok
+test emit::lower::tests::buffer_formats_by_number ... ok
+test emit::lower::tests::packed_buffer_formats_by_number ... ok
+test emit::lower::tests::perm_constant_selector_needs_no_int64 ... ok
+test emit::lower::tests::perm_dynamic_selector_needs_no_int64 ... ok
+test emit::lower::tests::scalar_bit_tests_lower ... ok
+test emit::lower::tests::small_floats_widen_as_halves ... ok
+test emit::lower::tests::waterfall_loops_over_descriptors_joined_per_lane_sample_with_each_lanes_own ... ok
+test emit::lower::tests::waterfall_loops_over_per_lane_descriptors_sample_with_each_lanes_own ... ok
+test emit::sampler::tests::console_compiled_samplers_decode ... ok
+test emit::tests::a_stencil_export_declares_the_stencil_ref_feature ... ok
+test emit::tests::an_exec_high_write_does_not_overflow_the_stack ... ok
+test emit::tests::constant_color_validates ... ok
+test emit::tests::reading_a_channel_below_an_input_element_does_not_underflow ... ok
+test emit::tests::sample_interpolated_inputs_set_psv_sample_frequency ... ok
+test emit::tests::stub_pipeline_is_created ... ok
+test emit::tests::the_loop_limit_switch_parses_or_falls_back ... ok
+test emit::valu_tests::bfe_signed_and_unsigned_match_rdna2 ... ok
+test emit::valu_tests::max_and_min_order_negative_zero_below_positive_zero ... ok
+test emit::valu_tests::packed_add_selects_halves_of_inline_constants ... ok
+test emit::valu_tests::v_cmp_class_f16_matches_rdna2 ... ok
+test emit::valu_tests::v_cmp_lg_is_false_for_nan ... ok
+test emit::valu_tests::v_cvt_norm_i16_and_u16_f16_round_the_exact_product ... ok
+test emit::valu_tests::v_cvt_u16_and_i16_f16_saturate ... ok
+test emit::valu_tests::v_fract_f16_never_returns_one ... ok
+test emit::valu_tests::v_fract_f32_never_returns_one ... ok
+test emit::valu_tests::v_med3_f16_matches_rdna2_with_nan ... ok
+test emit::valu_tests::v_med3_f32_matches_rdna2_with_nan ... ok
+test emit::valu_tests::v_sin_and_v_cos_f16_reduce_large_turns ... ok
+test emit::valu_tests::v_sin_and_v_cos_f32_reduce_large_turns ... ok
+test emit::waterfall_tests::lanes_load_from_the_buffer_their_nested_arms_chose ... ok
+test emit::waterfall_tests::lanes_sample_the_entry_their_offset_names_in_the_console_waterfall ... ok
+test emit::waterfall_tests::lanes_sample_the_texture_their_arm_loaded_or_picked ... ok
+test emit::waterfall_tests::lanes_sample_the_texture_their_if_else_arm_chose ... ok
+test emit::waterfall_tests::lanes_sample_their_own_texture_in_a_waterfall_narrowed_by_v_cmpx ... ok
+test emit::wave::tests::dpp_lanes_follow_the_isa ... ok
+test emit::wave::tests::prefixes_are_recognised ... ok
+test gfx10::opcodes::tests::s_ttracedata_imm_is_sopp_0x28 ... ok
+test gfx10::sp3::tests::image_d16_data_is_packed ... ok
+test gfx10::sp3::tests::lane_masks_follow_the_wave_size ... ok
+test gfx10::sp3::tests::memory_and_export ... ok
+test gfx10::sp3::tests::scalar ... ok
+test gfx10::sp3::tests::vector_modifiers ... ok
+test gfx10::tests::follows_branches_and_skips_data ... ok
+test gfx10::tests::follows_far_jumps ... ok
+test gfx10::tests::follows_far_jumps_backward ... ok
+test gfx10::tests::lengths_and_names ... ok
+test gfx10::tests::rejects_bad_code ... ok
+test gfx10::tests::tables_are_sorted ... ok
+test io::tests::interpolation_pairs_and_color_exports ... ok
+test io::tests::mesh_inputs_and_primitive_export ... ok
+test io::tests::pixel_vgprs_follow_the_input_address ... ok
+test io::tests::unpaired_or_unknown_interpolation_fails ... ok
+test ir::tests::drops_scheduling_and_follows_far_jumps ... ok
+test ir::tests::in_place_scalar_ops_read_their_destination ... ok
+test ir::tests::joins_get_phis_only_where_values_differ ... ok
+test ir::tests::loops_carry_values_through_phis ... ok
+test ir::tests::relative_vgpr_access_spans_up_to_the_vgpr_count ... ok
+test ir::tests::reports_what_it_cannot_express ... ok
+test native::tests::compute_dispatch_settings ... ok
+test native::tests::finds_graphics_programs ... ok
+test native::tests::finds_mesh_and_compute_programs ... ok
+test native::tests::initialized_sgprs_covers_user_system_and_scratch ... ok
+test native::tests::pc_layout_has_none ... ok
+test native::tests::reads_every_native_blob ... ok
+test native::tests::reads_mesh_outputs_and_limits ... ok
+test native::tests::reads_pixel_io_and_applies_the_full_export_patch ... ok
+test native::tests::reads_root_tables ... ok
+test native::tests::rejects_corrupt_blobs ... ok
+test resource::tests::a_buffer_descriptor_joined_per_lane_is_traced_on_the_paths_of_lanes_that_load ... ok
+test resource::tests::a_compare_that_does_not_mask_the_access_is_no_waterfall ... ok
+test resource::tests::a_descriptor_read_from_the_first_lane_of_a_loop_phi_fails_naming_it ... ok
+test resource::tests::a_descriptor_used_after_exec_is_restored_is_no_waterfall ... ok
+test resource::tests::a_first_lane_read_outside_a_loop_is_no_waterfall ... ok
+test resource::tests::a_first_lane_read_without_its_compare_is_no_waterfall ... ok
+test resource::tests::a_loop_that_drops_unmatched_lanes_is_no_waterfall ... ok
+test resource::tests::a_per_lane_descriptor_some_lanes_do_not_write_fails ... ok
+test resource::tests::a_retry_that_keeps_other_lanes_than_those_waiting_is_no_waterfall ... ok
+test resource::tests::a_selection_that_mixes_two_descriptors_fails ... ok
+test resource::tests::a_v_cmpx_waterfall_whose_retry_drops_lanes_is_none ... ok
+test resource::tests::a_waterfall_narrowed_by_v_cmpx_is_one ... ok
+test resource::tests::a_waterfall_nested_in_another_is_refused_by_name ... ok
+test resource::tests::a_wave64_access_with_exec_hi_overwritten_is_no_waterfall ... ok
+test resource::tests::a_wave64_retry_of_one_half_is_no_waterfall ... ok
+test resource::tests::an_access_under_a_further_mask_is_no_waterfall ... ok
+test resource::tests::descriptors_joined_by_control_flow_are_traced_per_edge ... ok
+test resource::tests::descriptors_joined_from_a_per_lane_load_and_a_per_lane_choice_are_traced_per_path ... ok
+test resource::tests::descriptors_read_from_the_first_lane_of_a_per_lane_choice_are_traced_per_lane ... ok
+test resource::tests::descriptors_read_from_the_first_lane_of_an_if_else_join_are_traced_per_path ... ok
+test resource::tests::descriptors_read_from_the_first_lane_of_lds_fail_naming_it ... ok
+test resource::tests::descriptors_read_from_the_first_lane_of_per_lane_loads_are_traced_to_them ... ok
+test resource::tests::descriptors_selected_by_scc_are_traced_per_outcome ... ok
+test resource::tests::heap_indices_from_root_constants_in_a_merged_stage ... ok
+test resource::tests::root_descriptors_are_built_in_code ... ok
+test resource::tests::spilled_sgprs_are_followed_through_vgpr_lanes ... ok
+test resource::tests::table_descriptors_are_loaded_from_their_range ... ok
+test resource::tests::the_console_waterfall_over_a_first_lane_offset_is_one ... ok
+test resource::tests::untraceable_addresses_fail_with_a_reason ... ok
+test structure::tests::divergent_if_becomes_a_lane_branch ... ok
+test structure::tests::divergent_loop_exits_per_lane ... ok
+test structure::tests::exec_narrowed_without_a_branch_leaves_a_guard ... ok
+test structure::tests::irreducible_loops_are_split ... ok
+test structure::tests::scalar_branches_stay_uniform ... ok
+
+test result: ok. 120 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 10.61s
+
+   Doc-tests victory_shader
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

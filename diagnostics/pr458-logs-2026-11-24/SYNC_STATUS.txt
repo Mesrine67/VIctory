@@ -1,0 +1,8 @@
+Repository sync status (2026-11-24)
+
+Original repository: Marvisak/VIctory main at ffe310eb2098e52169f4c44db5ffdabf43a72622.
+Fork main: Mesrine67/VIctory main fast-forwarded from 8e79c80 to the same ffe310e commit.
+Local PR-resolution branch: fix/intro-credits-rendering-stability at e06a73ad4c5d99f3ca175bd8d3cebfb8737566e0; pushed to Mesrine67/VIctory.
+PR #458 still points to techselect/VIctory head 360f382. Push to that source repository was denied (HTTP 403), so the open PR remains unupdated.
+
+Current build/test evidence is in the attached logs. The title executable entry point was not executed because Defender's detection remains on that file and no Windows Sandbox is installed. The current safe preflight mapped the executable and resolved all imports (0 missing).
