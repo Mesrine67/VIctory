@@ -155,17 +155,14 @@ pub extern "system" fn GetProcAddress(module: *mut c_void, name: *const u8) -> *
     let Some(m) = registry().iter().find(|m| handle(m) == module) else {
         return host_override(module, name).unwrap_or_else(|| host::get_proc_address(module, name));
     };
-    // Values below 0x10000 are ordinals; we export by name only.
-    if (name as usize) < 0x1_0000 {
-        tracing::warn!(
-            module = m.name,
-            ordinal = name as usize,
-            "GetProcAddress by ordinal"
-        );
-        return std::ptr::null_mut();
-    }
-    // SAFETY: not an ordinal, so the title passes a NUL-terminated name.
-    let name = unsafe { CStr::from_ptr(name.cast()) }.to_string_lossy();
+    let name = if (name as usize) < 0x1_0000 {
+        format!("#{}", name as usize)
+    } else {
+        // SAFETY: not an ordinal, so the title passes a NUL-terminated name.
+        unsafe { CStr::from_ptr(name.cast()) }
+            .to_string_lossy()
+            .into_owned()
+    };
     match m.exports.iter().find(|e| e.name == name) {
         Some(e) => e.address as *mut c_void,
         None => {
@@ -683,5 +680,16 @@ mod tests {
         let runtime = LoadLibraryA(c"xgameruntime.dll".as_ptr().cast());
         assert!(!runtime.is_null());
         assert_eq!(GetModuleHandleW(w("XGameRuntime.dll").as_ptr()), runtime);
+    }
+
+    #[test]
+    fn pseudo_module_exports_resolve_by_ordinal() {
+        let game_input = LoadLibraryW(w("GameInput.dll").as_ptr());
+        assert!(!game_input.is_null());
+        assert_eq!(
+            GetProcAddress(game_input, std::ptr::without_provenance::<u8>(1)) as usize,
+            crate::registry::lookup("GameInput.dll", "#1").unwrap()
+        );
+        assert!(GetProcAddress(game_input, std::ptr::without_provenance::<u8>(2)).is_null());
     }
 }
