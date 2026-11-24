@@ -10,3 +10,8 @@ This bundle includes the original PR comment logs plus the latest local validati
 - VIctory_launch_recheck and VIctory-WARP-host-precheck: launch blockers, including the Defender detection and host isolation/memory checks.
 
 No bundled log contains a GTA VI gameplay run. Defender reported the supplied title EXE as Trojan:Win32/MalUri.A!cl; no --execute launch was performed.
+
+Latest update — PR #458 repair attempt:
+- PR remains OPEN / CONFLICTING. The tested merge commit e06a73ad is available on Mesrine67/VIctory, with exact parents PR head 360f382 and current main ffe310e.
+- The source push and GitHub update-branch action were rejected because of upstream branch permissions/conflicts; creating a replacement PR was rejected because Mesrine67 lacks CreatePullRequest permission.
+- See PR458_repair_attempt_2026-11-24.log for the complete responses. No force push was attempted.

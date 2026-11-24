@@ -1,0 +1,23 @@
+VIctory PR #458 conflict repair attempt — 2026-11-24
+
+Repository: Marvisak/VIctory
+PR: https://github.com/Marvisak/VIctory/pull/458
+State checked with gh pr view --repo github.com/Marvisak/VIctory:
+- OPEN, mergeStateStatus DIRTY, mergeable CONFLICTING
+- PR head: techselect/VIctory:fix/intro-credits-rendering-stability @ 360f38256dea4e80f5b3afd84227b61462b9b6a9
+- GitHub PR metadata baseRefOid: d2a4bae1f49533ef5cb512fd1b1ba1513f2e1989
+- Current Marvisak/VIctory main from GitHub and local fetch: ffe310eb2098e52169f4c44db5ffdabf43a72622
+
+Existing tested resolution:
+- Commit e06a73ad4c5d99f3ca175bd8d3cebfb8737566e0
+- Parent 1: exact PR head 360f38256dea4e80f5b3afd84227b61462b9b6a9
+- Parent 2: latest main ffe310eb2098e52169f4c44db5ffdabf43a72622
+- Available on Mesrine67/VIctory branch fix/intro-credits-rendering-stability
+- Diagnostic build passed; shader tests: 120 passed, 0 failed, 1 ignored; Clippy passed. See adjacent logs in this directory.
+
+Attempts to apply the resolution to the original PR:
+1. Fast-forward push to techselect/VIctory was rejected: HTTP 403, permission denied to techselect/VIctory.git for Mesrine67.
+2. gh pr update-branch 458 --repo github.com/Marvisak/VIctory was rejected: Cannot update PR branch due to conflicts.
+3. Replacement PR from Mesrine67/VIctory was rejected by GitHub GraphQL: Mesrine67 lacks CreatePullRequest permission for Marvisak/VIctory.
+
+Result: the resolution is committed, tested, and available on the user's fork, but PR #458 itself remains open and conflicting because the connected account cannot write to its source repository or create a replacement PR in the upstream repository. No force push was attempted.
