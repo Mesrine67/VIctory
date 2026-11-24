@@ -1030,6 +1030,7 @@ fn float_semantics_are_the_consoles() {
                 roots: vec![(0, Root::Constants(user_data(&cs, &k)))],
                 views: &views,
                 samplers: &[],
+                stride_table: None,
                 groups: [1, 1, 1],
             },
         )
@@ -1170,6 +1171,7 @@ fn translated_compute_matches_pc() {
         roots,
         views: &views,
         samplers: &samplers,
+        stride_table: None,
         groups: [2, 2, 1],
     };
     let mut failures = Vec::new();

@@ -30,9 +30,18 @@ pub(crate) struct HostHeap {
     /// released the resource may still be read, and a freed host resource
     /// read there is a GPU page fault (the console reads stale memory).
     kept: Mutex<Vec<Option<ID3D12Resource>>>,
+    /// Bytes per element for each view-heap slot. The upload resource is
+    /// created only if a translated shader needs runtime strides.
+    strides: Mutex<StrideTable>,
     /// Where the search for free dynamic slots starts, and which are taken
     /// (by lists not yet reset).
     next: Mutex<(u32, Vec<bool>)>,
+}
+
+struct StrideTable {
+    slots: Vec<u32>,
+    buffer: Option<ID3D12Resource>,
+    data: usize,
 }
 
 /// Host heaps' GPU ranges (start, bytes, bytes per slot, sampler), for
@@ -145,6 +154,11 @@ impl HostHeap {
             sampler,
             made: Mutex::new(vec![0; count as usize]),
             kept: Mutex::new(vec![None; (count + extra) as usize]),
+            strides: Mutex::new(StrideTable {
+                slots: vec![0; (count + extra) as usize],
+                buffer: None,
+                data: 0,
+            }),
             next: Mutex::new((0, vec![false; extra as usize])),
         };
         // A slot never written is undefined: shaders reading one (a slot
@@ -276,6 +290,58 @@ impl HostHeap {
         if let Some(slots) = guard.1.get_mut(at as usize..end) {
             slots.fill(false);
         }
+        drop(guard);
+        self.clear_strides(first, end.saturating_sub(at as usize) as u32);
+    }
+
+    fn set_stride(&self, index: u32, stride: u32) {
+        let mut table = self.strides.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(slot) = table.slots.get_mut(index as usize) else {
+            return;
+        };
+        *slot = stride;
+        if table.data != 0 {
+            // SAFETY: `data` is the persistent mapping for `slots.len()`
+            // dwords and `index` was checked above.
+            unsafe { (table.data as *mut u32).add(index as usize).write(stride) };
+        }
+    }
+
+    fn clear_strides(&self, first: u32, n: u32) {
+        let mut table = self.strides.lock().unwrap_or_else(|e| e.into_inner());
+        let start = first as usize;
+        let end = start.saturating_add(n as usize).min(table.slots.len());
+        let Some(slots) = table.slots.get_mut(start..end) else {
+            return;
+        };
+        slots.fill(0);
+        if table.data != 0 {
+            // SAFETY: the mapped upload resource covers this checked range.
+            unsafe { std::ptr::write_bytes((table.data as *mut u32).add(start), 0, end - start) };
+        }
+    }
+
+    /// The root SRV backing this host heap's runtime stride table.
+    pub(crate) fn stride_table_binding(&self) -> Option<(ID3D12Resource, u64)> {
+        let mut table = self.strides.lock().unwrap_or_else(|e| e.into_inner());
+        if table.buffer.is_none() {
+            let size = (table.slots.len() as u64 * 4).max(4);
+            let (buffer, data) = host()?.upload_buffer(size)?;
+            // SAFETY: the mapped upload buffer covers all stride slots.
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    table.slots.as_ptr(),
+                    data.cast::<u32>(),
+                    table.slots.len(),
+                )
+            };
+            table.data = data as usize;
+            table.buffer = Some(buffer);
+        }
+        let buffer = table.buffer.as_ref()?.clone();
+        // SAFETY: a live upload buffer.
+        let address = unsafe { buffer.GetGPUVirtualAddress() };
+        Some((buffer, address))
     }
 
     /// Makes slot `index` (a dynamic one) from `view`; a null view if the
@@ -285,6 +351,7 @@ impl HostHeap {
         if kept.is_none() {
             null_for(view, self.cpu(index));
         }
+        self.set_stride(index, kept.as_ref().map_or(0, |_| buffer_stride(view)));
         self.keep(index, kept.flatten());
     }
 
@@ -295,6 +362,7 @@ impl HostHeap {
         } else {
             null_view(self.cpu(index));
         }
+        self.set_stride(index, 0);
         self.keep(index, None);
     }
 
@@ -309,6 +377,7 @@ impl HostHeap {
     /// Makes slot `index` (a dynamic one) a constant buffer view of host
     /// memory (the list's own, which it holds).
     pub(crate) fn constant_at(&self, index: u32, gpu: u64, size: u32) {
+        self.set_stride(index, 0);
         self.keep(index, None);
         let Some(host) = host() else { return };
         let desc = D3D12_CONSTANT_BUFFER_VIEW_DESC {
@@ -373,6 +442,7 @@ impl HostHeap {
             if kept.is_none() && !self.sampler {
                 null_for(&view, self.cpu(index));
             }
+            self.set_stride(index, buffer_stride(&view));
             self.keep(index, kept.flatten());
         }
         Some(view)
@@ -441,6 +511,46 @@ fn element_size(desc: &D3D12_SHADER_RESOURCE_VIEW_DESC) -> u64 {
     } else {
         crate::resource::element(desc.Format.0 as u32).map_or(0, |(bytes, _)| bytes)
     }
+}
+
+fn srv_buffer_stride(words: &[u32; 10]) -> u64 {
+    let desc = srv_desc(words);
+    if desc.ViewDimension.0 != 1 {
+        return 0;
+    }
+    element_size(&desc)
+}
+
+fn uav_buffer_stride(words: &[u32; 10]) -> u64 {
+    let desc = uav_desc(words);
+    if desc.ViewDimension.0 != 1 {
+        return 0;
+    }
+    // SAFETY: a buffer view's union member.
+    let buffer = unsafe { desc.Anonymous.Buffer };
+    if buffer.StructureByteStride > 0 {
+        u64::from(buffer.StructureByteStride)
+    } else if buffer.Flags.0 & D3D12_BUFFER_UAV_FLAG_RAW.0 != 0 {
+        4
+    } else {
+        crate::resource::element(desc.Format.0 as u32).map_or(0, |(bytes, _)| bytes)
+    }
+}
+
+/// The byte stride the host descriptor exposes, when it is a buffer view.
+fn buffer_stride(view: &View) -> u32 {
+    let bytes = match view {
+        View::Shader(_, Some(words)) => srv_buffer_stride(words),
+        View::Unordered(_, _, Some(words)) => uav_buffer_stride(words),
+        View::Placed(false, resource, words) if resource[0] == 1 => {
+            words[..10].try_into().ok().map_or(0, srv_buffer_stride)
+        }
+        View::Placed(true, resource, words) if resource[0] == 1 => {
+            words[..10].try_into().ok().map_or(0, uav_buffer_stride)
+        }
+        _ => 0,
+    };
+    u32::try_from(bytes).unwrap_or(0)
 }
 
 /// The title memory a buffer shader or unordered access view reads: its

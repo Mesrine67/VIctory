@@ -512,6 +512,28 @@ impl State {
                     }
                 }
             }
+            if let Some(param) = stage.stride_table {
+                let Some(view_heap) = (self.heaps[0] != 0)
+                    .then(|| crate::descriptor::heap(self.heaps[0] as This).host())
+                    .flatten()
+                else {
+                    once!("a runtime stride table without a bound host view heap");
+                    return false;
+                };
+                let Some((buffer, gpu)) = view_heap.stride_table_binding() else {
+                    once!("a runtime stride table could not be created");
+                    return false;
+                };
+                list.keep(&buffer);
+                // SAFETY: an open list; the root SRV names a live upload buffer.
+                unsafe {
+                    if compute {
+                        l.SetComputeRootShaderResourceView(param, gpu);
+                    } else {
+                        l.SetGraphicsRootShaderResourceView(param, gpu);
+                    }
+                }
+            }
         }
         true
     }
@@ -540,6 +562,8 @@ impl State {
         }
         if !self.bind(list, p, true) {
             DROPPED.fetch_add(1, Ordering::Relaxed);
+            #[cfg(feature = "diagnostics")]
+            crate::pipeline::note_drop(self.pipeline as This);
             return;
         }
         #[cfg(feature = "diagnostics")]

@@ -35,6 +35,7 @@ pub(crate) struct Lowered {
     pub cmp_samplers: u64,
     pub root_cbvs: Vec<u8>,
     pub root_srvs: Vec<u8>,
+    pub dynamic_stride_table: bool,
     pub user_data: Vec<UserData>,
     pub samplers: Vec<[u32; 4]>,
     /// Heap handles made with a non-uniform index.
@@ -901,11 +902,13 @@ impl<'a> Lower<'a> {
         self.s.samplers = self.samplers.len() as u32;
         let root_cbvs = self.s.root_cbvs.iter().map(|r| r.0).collect();
         let root_srvs = self.s.root_srvs.iter().map(|r| r.0).collect();
+        let dynamic_stride_table = self.s.stride_table.is_some();
         let cmp_samplers = self.s.cmp_samplers;
         Ok(Lowered {
             cmp_samplers,
             root_cbvs,
             root_srvs,
+            dynamic_stride_table,
             #[cfg(test)]
             nonuniform_handles: self.s.nonuniform_handles,
             #[cfg(test)]
@@ -3560,6 +3563,61 @@ impl<'a> Lower<'a> {
         }
         let shift = self.s.m.i32(if sampler { 4 } else { 5 });
         Ok(self.s.m.bin(c, Bin::LShr, addr, shift))
+    }
+
+    /// The slot of a descriptor loaded directly or chosen by control flow.
+    fn heap_index_source(&mut self, src: &Source, sampler: bool) -> Result<V, Why> {
+        match src {
+            Source::Loaded { load, first } => self.heap_index(*load, *first, sampler),
+            Source::Phi { block, args } => {
+                let mut incoming = Vec::new();
+                for (&q, arg) in self.x.p.blocks[*block].preds.iter().zip(args) {
+                    if self.block[q].is_none() {
+                        continue;
+                    }
+                    let (Some(tail), Source::Loaded { load, first }) = (self.tail[q], arg) else {
+                        return Err("a descriptor chosen by control flow");
+                    };
+                    let at = self.edges.get(&(q, *block)).copied().unwrap_or(tail);
+                    let here = std::mem::replace(&mut self.cur, at);
+                    let index = self.heap_index(*load, *first, sampler);
+                    self.cur = here;
+                    incoming.push((index?, at));
+                }
+                let join = self.block[*block].ok_or("a descriptor chosen by control flow")?;
+                let phi = self.s.m.phi(join, self.s.t.i32);
+                self.s.m.set_phi(phi, incoming);
+                Ok(phi)
+            }
+            _ => Err("a structured buffer without a heap descriptor index"),
+        }
+    }
+
+    /// The runtime byte offset for an indexed buffer operation whose
+    /// descriptor stride was not present in shader metadata.
+    fn structured_byte_offset(&mut self, src: &Source, index: V, offset: V) -> Result<V, Why> {
+        let slot = self.heap_index_source(src, false)?;
+        let table = self.s.stride_table_handle();
+        let c = self.cur;
+        let four = self.s.m.i32(4);
+        let byte = self.s.m.bin(c, Bin::Mul, slot, four);
+        let (undef, mask, align) = (
+            self.s.m.undef(self.s.t.i32),
+            self.s.m.i8(1),
+            self.s.m.i32(4),
+        );
+        let loaded = self.s.op(
+            c,
+            "rawBufferLoad.f32",
+            Attr::ReadOnly,
+            self.s.t.res_ret,
+            139,
+            &[table, byte, undef, mask, align],
+        );
+        let lane = self.s.m.extract(c, loaded, 0);
+        let stride = self.as_int(lane);
+        let scaled = self.s.m.bin(c, Bin::Mul, index, stride);
+        Ok(self.s.m.bin(c, Bin::Add, scaled, offset))
     }
 
     fn valu(&mut self, inst: &Inst, b: usize, i: usize) -> Result<(), Why> {
@@ -6278,11 +6336,16 @@ impl<'a> Lower<'a> {
             let (h, coords) = match index {
                 Some(index) => {
                     let stride = used.map_or(0, |u| u.stride);
-                    if stride < 4 || !stride.is_multiple_of(4) {
+                    if stride == 0 {
+                        let h = self.handle(site, src, false, (11 | u, 0))?;
+                        let byte = self.structured_byte_offset(src, index, off)?;
+                        (h, [byte, iu, iu])
+                    } else if stride < 4 || !stride.is_multiple_of(4) {
                         return Err("a structured buffer of unknown stride");
+                    } else {
+                        let h = self.handle(site, src, false, (12 | u, stride))?;
+                        (h, [index, off, iu])
                     }
-                    let h = self.handle(site, src, false, (12 | u, stride))?;
-                    (h, [index, off, iu])
                 }
                 None => (self.handle(site, src, false, (11 | u, 0))?, [off, iu, iu]),
             };
@@ -6361,11 +6424,17 @@ impl<'a> Lower<'a> {
                 match index {
                     Some(index) => {
                         let stride = used.map_or(0, |u| u.stride);
-                        if stride < 4 || !stride.is_multiple_of(4) {
+                        if stride == 0 {
+                            let h = self.handle(site, src, false, (11 | u, 0))?;
+                            let byte = self.structured_byte_offset(src, index, off)?;
+                            args.push(h);
+                            args.extend([byte, iu]);
+                        } else if stride < 4 || !stride.is_multiple_of(4) {
                             return Err("a structured buffer of unknown stride");
+                        } else {
+                            args.push(self.handle(site, src, false, (12 | u, stride))?);
+                            args.extend([index, off]);
                         }
-                        args.push(self.handle(site, src, false, (12 | u, stride))?);
-                        args.extend([index, off]);
                     }
                     None => {
                         args.push(self.handle(site, src, false, (11 | u, 0))?);
@@ -6422,18 +6491,30 @@ impl<'a> Lower<'a> {
             match index {
                 Some(index) => {
                     let stride = used.map_or(0, |u| u.stride);
-                    if stride < 4 || !stride.is_multiple_of(4) {
+                    if stride == 0 {
+                        let h = self.handle(site, src, false, (11 | u, 0))?;
+                        let byte = self.structured_byte_offset(src, index, off)?;
+                        self.s.op(
+                            c,
+                            "rawBufferLoad.f32",
+                            Attr::ReadOnly,
+                            self.s.t.res_ret,
+                            139,
+                            &[h, byte, iu, mask, align],
+                        )
+                    } else if stride < 4 || !stride.is_multiple_of(4) {
                         return Err("a structured buffer of unknown stride");
+                    } else {
+                        let h = self.handle(site, src, false, (12 | u, stride))?;
+                        self.s.op(
+                            c,
+                            "rawBufferLoad.f32",
+                            Attr::ReadOnly,
+                            self.s.t.res_ret,
+                            139,
+                            &[h, index, off, mask, align],
+                        )
                     }
-                    let h = self.handle(site, src, false, (12 | u, stride))?;
-                    self.s.op(
-                        c,
-                        "rawBufferLoad.f32",
-                        Attr::ReadOnly,
-                        self.s.t.res_ret,
-                        139,
-                        &[h, index, off, mask, align],
-                    )
                 }
                 None => {
                     let h = self.handle(site, src, false, (11 | u, 0))?;

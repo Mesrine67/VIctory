@@ -82,6 +82,7 @@ fn build(words: &[u32], buffers: bool) -> HostShader {
         static_samplers: Vec::new(),
         root_cbvs: lowered.root_cbvs,
         root_srvs: lowered.root_srvs,
+        dynamic_stride_table: lowered.dynamic_stride_table,
     };
     if let Ok(mut v) = validator::Validator::load(validator::Validator::default_path().as_deref()) {
         v.validate(&mut shader.dxil.clone())
@@ -135,6 +136,7 @@ fn run(shader: &HostShader, views: &[View]) -> Vec<(&'static str, Vec<u32>)> {
                     roots: vec![(0, Root::Constants(ud))],
                     views,
                     samplers: &samplers,
+                    stride_table: None,
                     groups: [1, 1, 1],
                 },
             )

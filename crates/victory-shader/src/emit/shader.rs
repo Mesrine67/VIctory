@@ -12,6 +12,8 @@ pub const SAMPLER_SPACE: u32 = 0;
 /// Where root CBVs and SRVs are bound: `b<root parameter index>` and
 /// `t<root parameter index>` in this space.
 pub const ROOT_CBV_SPACE: u32 = 1;
+/// Where the runtime structured-buffer stride table is bound: `t0`.
+pub const STRIDE_SPACE: u32 = 2;
 
 /// `ShaderFlags` bits (metadata) and their `SFI0` feature bits.
 pub(crate) mod flags {
@@ -65,6 +67,8 @@ pub(crate) struct Shader {
     pub root_cbvs: Vec<(u8, V)>,
     /// Root SRVs (raw buffers) read, likewise.
     pub root_srvs: Vec<(u8, V)>,
+    /// Root SRV handle for the runtime descriptor-stride table, if used.
+    pub stride_table: Option<V>,
     pub flags: u64,
     /// Heap handles made with a non-uniform index.
     pub nonuniform_handles: u32,
@@ -120,6 +124,7 @@ impl Shader {
             cmp_samplers: 0,
             root_cbvs: Vec::new(),
             root_srvs: Vec::new(),
+            stride_table: None,
             flags: 0,
             nonuniform_handles: 0,
             threads: None,
@@ -236,6 +241,30 @@ impl Shader {
         h
     }
 
+    /// The root SRV handle for the runtime descriptor-stride table.
+    pub fn stride_table_handle(&mut self) -> V {
+        if let Some(h) = self.stride_table {
+            return h;
+        }
+        let r = self.m.i32(0);
+        let bind = [r, r, self.m.i32(STRIDE_SPACE), self.m.i8(0)];
+        let bind = self.m.aggregate(self.t.bind, &bind);
+        let f = self.m.bool(false);
+        let block = self.entry;
+        let h = self.op(
+            block,
+            "createHandleFromBinding",
+            Attr::ReadNone,
+            self.t.handle,
+            217,
+            &[bind, r, f],
+        );
+        let h = self.annotate(block, h, 11, 0);
+        self.flags |= flags::RAW_BUFFERS;
+        self.stride_table = Some(h);
+        h
+    }
+
     /// The handle of immediate sampler `n` (a comparison sampler when its
     /// bit in `cmp_samplers` is set).
     pub fn sampler_handle(&mut self, block: usize, n: u32) -> V {
@@ -318,6 +347,7 @@ impl Shader {
             || self.samplers > 0
             || !self.root_cbvs.is_empty()
             || !self.root_srvs.is_empty()
+            || self.stride_table.is_some()
         {
             let empty = self.m.md_str("");
             let mut cbvs = None;
@@ -372,7 +402,7 @@ impl Shader {
                 cbvs = Some(self.m.md_node(cbv_list));
             }
             let mut srvs = None;
-            if !self.root_srvs.is_empty() {
+            if !self.root_srvs.is_empty() || self.stride_table.is_some() {
                 let ty = self
                     .m
                     .named_struct("struct.ByteAddressBuffer", vec![self.t.i32]);
@@ -396,6 +426,27 @@ impl Shader {
                         kind: 4,
                         space: ROOT_CBV_SPACE,
                         register: u32::from(slot),
+                        dxil_kind: 11,
+                    });
+                }
+                if self.stride_table.is_some() {
+                    let n = list.len() as u32;
+                    let ops = vec![
+                        Some(i32c(&mut self, n)),
+                        Some(self.m.md_value(u)),
+                        Some(empty),
+                        Some(i32c(&mut self, STRIDE_SPACE)),
+                        Some(i32c(&mut self, 0)),
+                        Some(i32c(&mut self, 1)),
+                        Some(i32c(&mut self, 11)),
+                        Some(i32c(&mut self, 0)),
+                        None,
+                    ];
+                    list.push(Some(self.m.md_node(ops)));
+                    bindings.push(Binding {
+                        kind: 4,
+                        space: STRIDE_SPACE,
+                        register: 0,
                         dxil_kind: 11,
                     });
                 }

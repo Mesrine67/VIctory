@@ -69,6 +69,10 @@ const fn vgpr(n: u8) -> u16 {
 /// 4 dwords of root constants in `s0..s3`, runs `body` (leaving its result in
 /// `v0`), and stores `v0` to dword 0 of the raw UAV at heap index 0.
 fn build_valu_cs(body: &[u32]) -> HostShader {
+    build_valu_cs_with_output(body, true)
+}
+
+fn build_valu_cs_with_output(body: &[u32], output: bool) -> HostShader {
     let mut words = Vec::new();
     // s[4:5] = descriptor table address (heap index 0 -> byte offset 0).
     words.push(s_mov_b32(5, 0x80)); // inline constant 0
@@ -79,7 +83,9 @@ fn build_valu_cs(body: &[u32]) -> HostShader {
         words.push(vop1(0x001, i + 1, sgpr(i))); // v_mov_b32
     }
     words.extend_from_slice(body);
-    words.extend_from_slice(&buffer_store_dword(0, 8, 0));
+    if output {
+        words.extend_from_slice(&buffer_store_dword(0, 8, 0));
+    }
     words.push(S_ENDPGM);
 
     let code: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
@@ -148,6 +154,7 @@ fn build_valu_cs(body: &[u32]) -> HostShader {
         static_samplers: Vec::new(),
         root_cbvs: lowered.root_cbvs,
         root_srvs: lowered.root_srvs,
+        dynamic_stride_table: lowered.dynamic_stride_table,
     };
 
     if let Ok(mut v) = validator::Validator::load(validator::Validator::default_path().as_deref()) {
@@ -201,12 +208,59 @@ fn run_cases(
                         roots: vec![(0, Root::Constants(ud))],
                         views: &[View::RawUav(1)],
                         samplers: &[],
+                        stride_table: None,
                         groups: [1, 1, 1],
                     },
                 )
                 .unwrap_or_else(|e| panic!("{label}: dispatch failed: {e}"));
             check(label, i, inputs, out[0][0]);
         }
+        ran += 1;
+    }
+    assert!(ran > 0, "neither hardware nor WARP SM 6.6 device available");
+}
+
+#[test]
+fn unknown_structured_buffer_stride_reads_the_runtime_table() {
+    let mut store = buffer_store_dword(0, 8, 0);
+    store[0] |= 1 << 13; // idxen
+    let mut body = vec![vop1(0x001, 0, sgpr(0))]; // v0 = root-constant index
+    body.extend_from_slice(&store);
+    let shader = build_valu_cs_with_output(&body, false);
+    assert!(shader.dynamic_stride_table);
+
+    let mut ran = 0;
+    for (label, warp) in [("hardware", false), ("warp", true)] {
+        let Ok(host) = Host::new(warp) else {
+            eprintln!("no SM 6.6 {label} device; skipped");
+            continue;
+        };
+        let (root, pso) = host
+            .compute_pipeline(&shader)
+            .unwrap_or_else(|e| panic!("{label}: compute_pipeline failed: {e}"));
+        let mut user_data = vec![0; shader.user_data_dwords().max(1) as usize];
+        for u in &shader.user_data {
+            if (u.root, u.slot) == (RootType::Constants, 0) {
+                user_data[u.index as usize] = 1;
+            }
+        }
+        let out = host
+            .dispatch(
+                &root,
+                &pso,
+                &Dispatch {
+                    roots: vec![(0, Root::Constants(user_data))],
+                    views: &[View::StructuredUav {
+                        dwords: 4,
+                        stride: 8,
+                    }],
+                    samplers: &[],
+                    stride_table: Some((1, &[8])),
+                    groups: [1, 1, 1],
+                },
+            )
+            .unwrap_or_else(|e| panic!("{label}: dispatch failed: {e}"));
+        assert_eq!(out[0][2], 1, "{label}: index 1 must address byte offset 8");
         ran += 1;
     }
     assert!(ran > 0, "neither hardware nor WARP SM 6.6 device available");

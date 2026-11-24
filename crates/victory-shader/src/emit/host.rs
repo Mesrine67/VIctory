@@ -158,6 +158,21 @@ impl Host {
                 ShaderVisibility: D3D12_SHADER_VISIBILITY_ALL,
             });
         }
+        for &(shader, visibility) in stages {
+            if shader.dynamic_stride_table {
+                params.push(D3D12_ROOT_PARAMETER1 {
+                    ParameterType: D3D12_ROOT_PARAMETER_TYPE_SRV,
+                    Anonymous: D3D12_ROOT_PARAMETER1_0 {
+                        Descriptor: D3D12_ROOT_DESCRIPTOR1 {
+                            ShaderRegister: 0,
+                            RegisterSpace: super::STRIDE_SPACE,
+                            Flags: D3D12_ROOT_DESCRIPTOR_FLAG_NONE,
+                        },
+                    },
+                    ShaderVisibility: visibility,
+                });
+            }
+        }
         let mut samplers = Vec::new();
         for &(s, vis) in stages {
             for (n, d) in s.static_samplers.iter().enumerate() {
@@ -528,6 +543,7 @@ fn stub(pixel: bool, outputs: Vec<SigElement>) -> HostShader {
         static_samplers: Vec::new(),
         root_cbvs: Vec::new(),
         root_srvs: Vec::new(),
+        dynamic_stride_table: false,
     }
 }
 
@@ -914,6 +930,8 @@ pub enum View<'a> {
     Cube(u32, &'a [[f32; 4]]),
     /// A raw buffer UAV of this many dwords, zeroed.
     RawUav(u32),
+    /// A structured buffer UAV of this many dwords, zeroed.
+    StructuredUav { dwords: u32, stride: u32 },
     /// An RGBA32F texture UAV (width, height), zeroed.
     TextureUav(u32, u32),
     /// An R32_UINT texture UAV (width, height), zeroed (atomics).
@@ -946,6 +964,8 @@ pub struct Dispatch<'a> {
     pub roots: Vec<(u32, Root)>,
     pub views: &'a [View<'a>],
     pub samplers: &'a [D3D12_SAMPLER_DESC],
+    /// Runtime view strides, bound as a raw root SRV at this root parameter.
+    pub stride_table: Option<(u32, &'a [u32])>,
     pub groups: [u32; 3],
 }
 
@@ -1191,6 +1211,37 @@ impl Host {
                         )?;
                         uavs.push((b, None, n, rb));
                     }
+                    View::StructuredUav { dwords, stride } => {
+                        let bytes = u64::from(dwords) * 4;
+                        if stride == 0 || bytes % u64::from(stride) != 0 {
+                            return Err(
+                                "structured UAV size must be a multiple of its stride".into()
+                            );
+                        }
+                        let b = make(
+                            D3D12_HEAP_TYPE_DEFAULT,
+                            &buffer(bytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
+                            D3D12_RESOURCE_STATE_COMMON,
+                        )?;
+                        let desc = D3D12_UNORDERED_ACCESS_VIEW_DESC {
+                            Format: DXGI_FORMAT_UNKNOWN,
+                            ViewDimension: D3D12_UAV_DIMENSION_BUFFER,
+                            Anonymous: D3D12_UNORDERED_ACCESS_VIEW_DESC_0 {
+                                Buffer: D3D12_BUFFER_UAV {
+                                    NumElements: (bytes / u64::from(stride)) as u32,
+                                    StructureByteStride: stride,
+                                    ..Default::default()
+                                },
+                            },
+                        };
+                        dev.CreateUnorderedAccessView(&b, None, Some(&desc), at);
+                        let rb = make(
+                            D3D12_HEAP_TYPE_READBACK,
+                            &buffer(bytes, D3D12_RESOURCE_FLAG_NONE),
+                            D3D12_RESOURCE_STATE_COPY_DEST,
+                        )?;
+                        uavs.push((b, None, dwords, rb));
+                    }
                     View::TextureUav(w, h) => {
                         let t = make(
                             D3D12_HEAP_TYPE_DEFAULT,
@@ -1319,6 +1370,11 @@ impl Host {
                         keep.push(b);
                     }
                 }
+            }
+            if let Some((param, data)) = d.stride_table {
+                let table = upload(data)?;
+                list.SetComputeRootShaderResourceView(param, table.GetGPUVirtualAddress());
+                keep.push(table);
             }
             let [x, y, z] = d.groups;
             list.Dispatch(x, y, z);
